@@ -20,7 +20,7 @@ import (
 )
 
 func TestProxyDefaultTimeoutNoEnv(t *testing.T) {
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestProxyDefaultTimeoutNoEnv(t *testing.T) {
 func TestProxyDefaultTimeoutBadEnv(t *testing.T) {
 	// "foo" is not a time.Duration value and should be ignored
 	t.Setenv("SPRAYPROXY_FORWARDING_REQUEST_TIMEOUT", "foo")
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestProxyDefaultTimeoutBadEnv(t *testing.T) {
 
 func TestProxyCustomTimeout(t *testing.T) {
 	t.Setenv("SPRAYPROXY_FORWARDING_REQUEST_TIMEOUT", "90s")
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestProxyCustomTimeout(t *testing.T) {
 func TestProxyNoWebhookSecret(t *testing.T) {
 	// removing the env var is not strictly required, making it explicit
 	os.Unsetenv(envWebhookSecret)
-	_, err := NewSprayProxy(false, false, zap.NewNop())
+	_, err := NewSprayProxy(false, false, false, zap.NewNop(), nil)
 	expectedError := "no webhook secret"
 	if err == nil || err.Error() != expectedError {
 		t.Errorf("Expected error %q, got %q", expectedError, err)
@@ -71,7 +71,7 @@ func TestProxyNoWebhookSecret(t *testing.T) {
 func TestProxyWebhookSecret(t *testing.T) {
 	secret := "testSecret"
 	t.Setenv("GH_APP_WEBHOOK_SECRET", secret)
-	p, err := NewSprayProxy(false, false, zap.NewNop())
+	p, err := NewSprayProxy(false, false, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("Unexpected error %q", err)
 	}
@@ -81,7 +81,7 @@ func TestProxyWebhookSecret(t *testing.T) {
 }
 
 func TestHandleProxy(t *testing.T) {
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -103,11 +103,14 @@ func TestHandleProxyMultiBackend(t *testing.T) {
 	defer backend1.GetServer().Close()
 	backend2 := test.NewTestServer()
 	defer backend2.GetServer().Close()
-
+	testBackend := map[string]string{
+		backend1.GetServer().URL: "",
+		backend2.GetServer().URL: "",
+	}
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Request = newProxyRequest()
-	proxy, err := NewSprayProxy(false, true, zap.NewNop(), backend1.GetServer().URL, backend2.GetServer().URL)
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), testBackend)
 	if err != nil {
 		t.Fatalf("failed to set up proxy: %v", err)
 	}
@@ -129,7 +132,7 @@ func TestHandleProxyMultiBackend(t *testing.T) {
 }
 
 func TestLargePayloadOnLimit(t *testing.T) {
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -147,7 +150,7 @@ func TestLargePayloadOnLimit(t *testing.T) {
 }
 
 func TestLargePayloadAboveLimit(t *testing.T) {
-	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	proxy, err := NewSprayProxy(false, true, false, zap.NewNop(), nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -174,19 +177,25 @@ func TestProxyLog(t *testing.T) {
 		config.Level,
 	)
 	logger := zap.New(core)
-	backend := test.NewTestServer()
-	defer backend.GetServer().Close()
-	proxy, err := NewSprayProxy(false, true, logger, backend.GetServer().URL)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = newProxyRequest()
-	proxy.HandleProxy(ctx)
-	expected := `"msg":"proxied request"`
-	log := buff.String()
-	if !strings.Contains(log, expected) {
-		t.Errorf("expected string %q did not appear in %q", expected, log)
-	}
+	t.Run("log 200 response", func(t *testing.T) {
+		buff.Reset()
+		backend := test.NewTestServer()
+		defer backend.GetServer().Close()
+		testBackend := map[string]string{
+			backend.GetServer().URL: "",
+		}
+		proxy, err := NewSprayProxy(false, true, false, logger, testBackend)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		ctx.Request = newProxyRequest()
+		proxy.HandleProxy(ctx)
+		expected := `"msg":"proxied request"`
+		log := buff.String()
+		if !strings.Contains(log, expected) {
+			t.Errorf("expected string %q did not appear in %q", expected, log)
+		}
+	})
 }
