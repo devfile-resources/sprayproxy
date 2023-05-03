@@ -32,7 +32,7 @@ components:
       deployment/memoryLimit: 100Mi
       deployment/memoryRequest: 10Mi
     kubernetes:
-      uri: config/kustomization.yaml
+      uri: config/deploy.yaml
 commands:
   - id: build-image
     apply:
