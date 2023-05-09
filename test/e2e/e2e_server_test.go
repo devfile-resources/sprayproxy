@@ -39,7 +39,7 @@ func TestLogRequestId(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	buff.Reset()
-	req, _ := http.NewRequest(http.MethodPost, "/", bytes.NewBufferString("hello"))
+	req, _ := http.NewRequest(http.MethodPost, "/proxy", bytes.NewBufferString("hello"))
 	server.Handler().ServeHTTP(w, req)
 	log := strings.TrimSuffix(buff.String(), "\n")
 	logLines := strings.Split(log, "\n")
@@ -78,5 +78,24 @@ func TestBackendRequestBody(t *testing.T) {
 	}
 	if reqBody != backend2.GetReqBody() {
 		t.Errorf("first backend, forwarded request does not match, want %q, got %q", reqBody, backend2.GetReqBody())
+	}
+}
+
+func TestServerProxyEndpoint(t *testing.T) {
+	backend := test.NewTestServer()
+	defer backend.GetServer().Close()
+	server, err := server.NewServer("localhost", 8080, false, true, backend.GetServer().URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/proxy", bytes.NewBufferString("hello"))
+	server.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+	responseBody := w.Body.String()
+	if responseBody != "proxied" {
+		t.Errorf("expected repsonse %q, got %q", "proxied", responseBody)
 	}
 }

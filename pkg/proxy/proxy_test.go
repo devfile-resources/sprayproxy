@@ -80,6 +80,24 @@ func TestProxyWebhookSecret(t *testing.T) {
 	}
 }
 
+func TestHandleProxyEndpoint(t *testing.T) {
+	proxy, err := NewSprayProxy(false, true, zap.NewNop())
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = newProxyRequest()
+	proxy.HandleProxyEndpoint(ctx)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+	responseBody := w.Body.String()
+	if responseBody != "proxied" {
+		t.Errorf("expected response %q, got %q", "proxied", responseBody)
+	}
+}
+
 func TestHandleProxy(t *testing.T) {
 	proxy, err := NewSprayProxy(false, true, zap.NewNop())
 	if err != nil {
@@ -111,7 +129,7 @@ func TestHandleProxyMultiBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to set up proxy: %v", err)
 	}
-	proxy.HandleProxy(ctx)
+	proxy.HandleProxyEndpoint(ctx)
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status code %d, got %d", http.StatusOK, w.Code)
 	}
@@ -135,8 +153,8 @@ func TestLargePayloadOnLimit(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "http://localhost:8080", bytes.NewBuffer(make([]byte, maxReqSize)))
-	proxy.HandleProxy(ctx)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "http://localhost:8080/proxy", bytes.NewBuffer(make([]byte, maxReqSize)))
+	proxy.HandleProxyEndpoint(ctx)
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status code %d, got %d", http.StatusOK, w.Code)
 	}
@@ -153,8 +171,8 @@ func TestLargePayloadAboveLimit(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "http://localhost:8080", bytes.NewBuffer(make([]byte, maxReqSize+1)))
-	proxy.HandleProxy(ctx)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "http://localhost:8080/proxy", bytes.NewBuffer(make([]byte, maxReqSize+1)))
+	proxy.HandleProxyEndpoint(ctx)
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("expected status code %d, got %d", http.StatusRequestEntityTooLarge, w.Code)
 	}
@@ -183,10 +201,15 @@ func TestProxyLog(t *testing.T) {
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Request = newProxyRequest()
-	proxy.HandleProxy(ctx)
+	proxy.HandleProxyEndpoint(ctx)
 	expected := `"msg":"proxied request"`
+	unexpectedBackend := backend.GetServer().URL + "/proxy"
 	log := buff.String()
 	if !strings.Contains(log, expected) {
 		t.Errorf("expected string %q did not appear in %q", expected, log)
+	}
+
+	if strings.Contains(log, unexpectedBackend) {
+		t.Errorf("proxy forwarded request to unexpected backend: %q, has /proxy path prefix", unexpectedBackend)
 	}
 }
