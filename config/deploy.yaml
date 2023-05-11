@@ -2,16 +2,10 @@ kind: List
 apiVersion: v1
 items:
   - apiVersion: v1
-    kind: Namespace
-    metadata:
-      name: sprayproxy
-      labels:
-        openshift.io/cluster-monitoring: "true"
-  - apiVersion: v1
     kind: ServiceAccount
     metadata:
       name: sprayproxy
-      namespace: sprayproxy
+      namespace: pkumari-tenant
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRole
     metadata:
@@ -43,7 +37,7 @@ items:
     subjects:
       - kind: ServiceAccount
         name: sprayproxy
-        namespace: sprayproxy
+        namespace: pkumari-tenant
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRole
     metadata:
@@ -72,12 +66,12 @@ items:
     subjects:
       - kind: ServiceAccount
         name: sprayproxy
-        namespace: sprayproxy
+        namespace: pkumari-tenant
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
       name: sprayproxy
-      namespace: sprayproxy
+      namespace: pkumari-tenant
       labels:
         app.kubernetes.io/name: sprayproxy
     spec:
@@ -159,7 +153,7 @@ items:
     kind: Service
     metadata:
       name: sprayproxy-service
-      namespace: sprayproxy
+      namespace: pkumari-tenant
       annotations:
         service.beta.openshift.io/serving-cert-secret-name: sprayproxy-tls
     spec:
@@ -173,7 +167,7 @@ items:
     kind: Service
     metadata:
       name: sprayproxy-metrics-service
-      namespace: sprayproxy
+      namespace: pkumari-tenant
     spec:
       selector:
         app.kubernetes.io/name: sprayproxy
@@ -186,7 +180,7 @@ items:
     kind: Route
     metadata:
       name: sprayproxy-route
-      namespace: sprayproxy
+      namespace: pkumari-tenant
       annotations:
         haproxy.router.openshift.io/hsts_header: "max-age=63072000"
     spec:
